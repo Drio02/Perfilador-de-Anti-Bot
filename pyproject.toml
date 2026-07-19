@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+ 
+[project]
+name = "antibot-scout"
+version = "0.1.0"
+description = "Diagnostica qué protección anti-bot usa un sitio y recomienda la estrategia de scraping adecuada"
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+ 
+[project.scripts]
+# Esto es lo que hace que tras `pip install -e .` puedas escribir
+# `scout https://ejemplo.com` en la terminal en vez de `python -m scout`.
+scout = "scout.cli:app"
+ 
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+ 
+[tool.setuptools.packages.find]
+where = ["src"]
+ 
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+ 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ 
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+ 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+ 
