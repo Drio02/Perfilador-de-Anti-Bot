@@ -111,3 +111,31 @@ def headersFor(family: str, extra: HeaderSet | None = None) -> HeaderSet:
         headers.update({k.lower(): v for k,v in extra.items()})
     return headers
 
+#
+#    RateLimiter
+#
+
+class RateLimiter:
+
+    def __init__(self, minInterval: float = 1.5) -> None:
+        if minInterval < 0:
+            raise ValueError('minInterval cannot be negative')
+        self.minInterval = minInterval
+        self._last: float | None = None
+        self._lock = threading.Lock()
+
+    def wait(self) -> float:
+        with self._lock:
+            now = time.monotonic()
+            slept = 0.0
+            if self._last is not None:
+                remaining = self.minInterval - (now - self._last)
+                if remaining > 0:
+                    time.sleep(remaining)
+                    slept = remaining
+            self._last = time.monotonic()
+            return slept
+    
+    def reset(self) -> None:
+        with self._lock:
+            self._last = None
