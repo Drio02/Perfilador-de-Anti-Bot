@@ -1,96 +1,172 @@
 """
-Tests de models.py.
+Contratos de datos que atraviesan todo el pipeline.
 
-Estos tests no tocan la red. Ese es justamente el punto de haber definido los
-contratos primero: podemos construir escenarios completos a mano y desarrollar
-el motor de análisis contra ellos, sin sondear nada.
+    ProbeResult  -> qué pasó cuando UN perfil visitó UNA url
+    ProbeMatrix  -> todos los ProbeResult de un objetivo, comparables entre sí
+
+Ningún módulo se pasa diccionarios sueltos: todo lo que cruza una frontera es
+uno de estos objetos, validado por pydantic.
 """
 
-from scout.models import ProbeMatrix, ProbeOutcome, ProbeResult
+from __future__ import annotations
+
+import hashlib
+from datetime import datetime, timezone
+from enum import Enum
+
+from pydantic import BaseModel, Field
 
 
-def _ok(profile: str, body: str = "<html>hola</html>", status: int = 200) -> ProbeResult:
-    return ProbeResult.from_response(
-        profile=profile,
-        url="https://ejemplo.com",
-        status_code=status,
-        headers={"Server": "cloudflare", "CF-RAY": "abc123"},
-        cookies={"__cf_bm": "xyz"},
-        body=body,
-        elapsed_ms=120.0,
-        http_version="HTTP/2",
-    )
+class ProbeOutcome(str, Enum):
+    """En qué capa terminó el sondeo. La capa donde te cortan revela la defensa."""
+
+    RESPONSE = "response"
+    DNS_ERROR = "dns_error"
+    CONNECT_ERROR = "connect_error"
+    TLS_ERROR = "tls_error"
+    CONNECTION_RESET = "connection_reset"
+    TIMEOUT = "timeout"
+    TOO_MANY_REDIRECTS = "too_many_redirects"
+    UNKNOWN_ERROR = "unknown_error"
+
+    @property
+    def reached_application(self) -> bool:
+        return self is ProbeOutcome.RESPONSE
+
+    @property
+    def blocked_below_http(self) -> bool:
+        return self in {
+            ProbeOutcome.TLS_ERROR,
+            ProbeOutcome.CONNECTION_RESET,
+            ProbeOutcome.CONNECT_ERROR,
+        }
 
 
-def test_cabeceras_se_normalizan_a_minusculas():
-    r = _ok("chrome124")
-    assert r.header("CF-RAY") == "abc123"
-    assert r.header("cf-ray") == "abc123"
-    assert "server" in r.headers  # guardada en minúsculas
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
-def test_hash_y_tamano_del_cuerpo():
-    r = _ok("chrome124", body="abc")
-    assert r.body_size == 3
-    assert r.body_sha256.startswith("ba7816bf")  # sha256("abc")
+class ProbeResult(BaseModel):
+    """Todo lo que sabemos de una petición: un perfil, una URL. Inmutable."""
 
+    model_config = {"frozen": True}
 
-def test_cuerpo_no_se_serializa():
-    r = _ok("chrome124")
-    assert r.body is not None
-    assert "body" not in r.model_dump()  # excluido del informe
+    profile: str
+    url: str
+    timestamp: datetime = Field(default_factory=_utcnow)
 
+    outcome: ProbeOutcome
+    error_detail: str | None = None
 
-def test_fallo_es_resultado_de_primera_clase():
-    r = ProbeResult.from_failure(
-        profile="naked_python",
-        url="https://ejemplo.com",
-        outcome=ProbeOutcome.TLS_ERROR,
-        error_detail="handshake abortado por el peer",
-    )
-    assert r.outcome.blocked_below_http
-    assert not r.outcome.reached_application
-    assert not r.looks_allowed
+    elapsed_ms: float = 0.0
 
+    status_code: int | None = None
+    http_version: str | None = None
+    final_url: str | None = None
+    redirect_chain: list[str] = Field(default_factory=list)
 
-def test_403_no_es_un_error_de_sondeo():
-    r = _ok("naked_python", status=403)
-    assert r.outcome is ProbeOutcome.RESPONSE  # sí hubo respuesta
-    assert r.looks_denied
-    assert not r.looks_allowed
+    headers: dict[str, str] = Field(default_factory=dict)
+    cookies: dict[str, str] = Field(default_factory=dict)
 
+    body_size: int = 0
+    body_sha256: str | None = None
+    body: str | None = Field(default=None, exclude=True)
 
-def test_escenario_filtrado_por_huella_tls():
-    """El caso que da valor a toda la herramienta: mismo sitio, distinto trato."""
-    m = ProbeMatrix(target="https://ejemplo.com")
-    m.add(
-        ProbeResult.from_failure(
-            profile="naked_python",
-            url="https://ejemplo.com",
-            outcome=ProbeOutcome.TLS_ERROR,
-            error_detail="reset durante handshake",
+    @classmethod
+    def from_response(
+        cls,
+        *,
+        profile: str,
+        url: str,
+        status_code: int,
+        headers: dict[str, str],
+        cookies: dict[str, str],
+        body: str,
+        elapsed_ms: float,
+        http_version: str | None = None,
+        final_url: str | None = None,
+        redirect_chain: list[str] | None = None,
+    ) -> ProbeResult:
+        raw = body.encode("utf-8", errors="replace")
+        return cls(
+            profile=profile,
+            url=url,
+            outcome=ProbeOutcome.RESPONSE,
+            status_code=status_code,
+            http_version=http_version,
+            final_url=final_url or url,
+            redirect_chain=redirect_chain or [],
+            headers={k.lower(): v for k, v in headers.items()},
+            cookies={k.lower(): v for k, v in cookies.items()},
+            body=body,
+            body_size=len(raw),
+            body_sha256=hashlib.sha256(raw).hexdigest(),
+            elapsed_ms=elapsed_ms,
         )
-    )
-    m.add(_ok("chrome124"))
 
-    assert m.allowed_profiles == ["chrome124"]
-    assert not m.all_allowed and not m.none_allowed
+    @classmethod
+    def from_failure(
+        cls,
+        *,
+        profile: str,
+        url: str,
+        outcome: ProbeOutcome,
+        error_detail: str,
+        elapsed_ms: float = 0.0,
+    ) -> ProbeResult:
+        return cls(
+            profile=profile,
+            url=url,
+            outcome=outcome,
+            error_detail=error_detail[:500],
+            elapsed_ms=elapsed_ms,
+        )
+
+    @property
+    def looks_allowed(self) -> bool:
+        return self.status_code is not None and 200 <= self.status_code < 300
+
+    @property
+    def looks_denied(self) -> bool:
+        return self.status_code in {401, 403, 429, 503}
+
+    def header(self, name: str) -> str | None:
+        return self.headers.get(name.lower())
 
 
-def test_deteccion_de_contenido_degradado():
-    """Dos 200, cuerpos distintos: a alguien le sirven otra cosa."""
-    m = ProbeMatrix(target="https://ejemplo.com")
-    m.add(_ok("naked_python", body="<html></html>"))
-    m.add(_ok("chrome124", body="<html>contenido real y largo</html>"))
+class ProbeMatrix(BaseModel):
+    """Los resultados de todos los perfiles contra un mismo objetivo."""
 
-    assert m.all_allowed  # ambos "pasaron"...
-    assert len(set(m.body_hashes.values())) == 2  # ...pero no vieron lo mismo
+    target: str
+    results: list[ProbeResult] = Field(default_factory=list)
+    started_at: datetime = Field(default_factory=_utcnow)
 
+    def add(self, result: ProbeResult) -> None:
+        self.results.append(result)
 
-def test_resultado_es_inmutable():
-    r = _ok("chrome124")
-    try:
-        r.status_code = 500
-    except Exception:
-        return
-    raise AssertionError("ProbeResult debería ser inmutable")
+    def by_profile(self, profile: str) -> ProbeResult | None:
+        return next((r for r in self.results if r.profile == profile), None)
+
+    @property
+    def profiles(self) -> list[str]:
+        return [r.profile for r in self.results]
+
+    @property
+    def allowed_profiles(self) -> list[str]:
+        return [r.profile for r in self.results if r.looks_allowed]
+
+    @property
+    def all_allowed(self) -> bool:
+        return bool(self.results) and all(r.looks_allowed for r in self.results)
+
+    @property
+    def none_allowed(self) -> bool:
+        return bool(self.results) and not any(r.looks_allowed for r in self.results)
+
+    @property
+    def body_hashes(self) -> dict[str, str]:
+        return {
+            r.profile: r.body_sha256
+            for r in self.results
+            if r.looks_allowed and r.body_sha256 is not None
+        }
