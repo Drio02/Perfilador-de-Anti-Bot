@@ -33,7 +33,7 @@ def _status_cell(r: ProbeResult) -> str:
 
 def render_matrix(matrix: ProbeMatrix) -> None:
     table = Table(title=f"Probe of {matrix.target}", header_style="bold")
-    table.add_column("perfil")
+    table.add_column("profile")
     table.add_column("outcome")
     table.add_column("status", justify="right")
     table.add_column("http")
