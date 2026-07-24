@@ -16,7 +16,7 @@ from scout.report import console as report
 
 app = typer.Typer(add_completion=False, help="Diagnoses anti-bot protections.")
 
-app.command()
+@app.command()
 def scan(
     url: str = typer.Argument(..., help="Target URL"),
     profiles: str = typer.Option(

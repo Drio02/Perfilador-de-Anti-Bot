@@ -36,9 +36,9 @@ class ScanConfig:
     @classmethod
     def from_env(cls) -> ScanConfig:
         return cls(
-            timeout=_env_float('SCAN_TIMEOUT', 20.0),
-            probe_delat = _env_float('SCOUT_PROBE_DELAT', 1.5),
-            proxy = _env_float('SCOUT_PROXY') or None
+            timeout=_env_float('SCOUT_TIMEOUT', 20.0),
+            probe_delay = _env_float('SCOUT_PROBE_DELAY', 1.5),
+            proxy = os.environ.get('SCOUT_PROXY') or None
         )
 
     def __post_init__(self) -> None:
