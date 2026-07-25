@@ -28,7 +28,7 @@ def normalize_url(raw: str) -> str:
     parts = urlsplit(raw)
 
     if parts.scheme not in ("http", "https"):
-        raise ValueError(f"Esquema no soportado: {parts.scheme!r}")
+        raise ValueError(f"Scheme not supported: {parts.scheme!r}")
     if not parts.hostname:
         raise ValueError(f"URL sin host: {raw!r}")
 

@@ -77,3 +77,22 @@ class ImpersonateProbe(Probe):
             return ProbeOutcome.UNKNOWN_ERROR, detail
  
         return ProbeOutcome.UNKNOWN_ERROR, detail
+
+## Specific profiles
+
+class Chrome131Probe(ImpersonateProbe):
+    name = "chrome131"
+    family = "chrome"
+    impersonate = "chrome131"
+ 
+ 
+class Safari18Probe(ImpersonateProbe):
+    name = "safari18"
+    family = "safari"
+    impersonate = "safari18_0"
+ 
+ 
+class Firefox135Probe(ImpersonateProbe):
+    name = "firefox135"
+    family = "firefox"
+    impersonate = "firefox135"

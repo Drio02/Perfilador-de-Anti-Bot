@@ -42,7 +42,7 @@ class ScanConfig:
         )
 
     def __post_init__(self) -> None:
-        if self.timeout < 0:
+        if self.timeout <= 0:
             raise ValueError('timeout must be positive')
         if self.probe_delay < 0:
             raise ValueError('probe delay must be positive')
