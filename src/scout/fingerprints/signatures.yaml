@@ -5,7 +5,7 @@ vendors:
     name: Cloudflare
     signals:
     - type: header_present
-      key: cf_ray
+      key: cf-ray
       weight: 0.4
       implies_role: cdn
     - type: header_value
@@ -28,7 +28,7 @@ vendors:
       implies_role: bot_defense
       enforcement: true
   - id: datadome
-    name: datadome
+    name: DataDome
     signals:
     - type: header_value
       key: x-datadome

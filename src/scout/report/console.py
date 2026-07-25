@@ -54,6 +54,7 @@ def render_matrix(matrix: ProbeMatrix) -> None:
             r.http_version or "-",
             f"{r.elapsed_ms:.0f}",
             str(r.body_size) if r.body_size else "-",
+            r.body_sha256[:12] if r.body_sha256 else "-",
             r.header("server") or "-",
             _defense_cell(r),
         )
