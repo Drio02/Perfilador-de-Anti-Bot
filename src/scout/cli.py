@@ -9,6 +9,9 @@ import json
 
 import typer
 
+from rich.console import Console
+from rich.table import Table
+
 from scout.config import ScanConfig
 from scout.orchestrator import scan as run_scan
 from scout.probes import registry
@@ -63,7 +66,33 @@ def profiles() -> None:
         marca = "*" if name in registry.DEFAULT_PROFILES else " "
         typer.echo(f" {marca} {name}")
     typer.echo("\n* = To default")
+
+@app.command()
+def profiles() -> None:
+    """List available profiles and how use them""" 
+    console = Console()
+    table = Table(title="Available profiles", header_style="bold")
+    table.add_column("profile")
+    table.add_column("impersonte browser")
+    table.add_column("headers family")
+    table.add_column("default", justify="center")
  
+    for name in registry.available():
+        info = registry.describe(name)
+        browser = "nothing (honest control)" if info["impersonate"] == "-" else info["impersonate"]
+        point = "[green]yes[/green]" if info["is_default"] else ""
+        table.add_row(name, browser, info["family"], point)
  
+    console.print(table)
+ 
+    defaults = ", ".join(registry.DEFAULT_PROFILES)
+    all = ",".join(registry.available())
+    console.print("\n[bold]Use:[/bold]")
+    console.print(f"  By defult probe with: [cyan]{defaults}[/cyan]")
+    console.print("  To choice anothers, pass them separated by commas:")
+    console.print(f"    [dim]scout scan <url> --profiles {all}[/dim]")
+    console.print("  Just one profile:")
+    console.print("    [dim]scout scan <url> --profiles chrome131[/dim]")
+
 if __name__ == "__main__":
     app()

@@ -25,6 +25,17 @@ DEFAULT_PROFILES: tuple[str,...] = (NakedProbe.name, Chrome131Probe.name)
 def available() -> list[str]:
     return sorted(Registry)
 
+def describe(name: str) -> dict[str, str]:
+    cls = get(name)
+    impersonate = getattr(cls, "impersonate", "") or "-"
+    return {
+        "name": name,
+        "family": getattr(cls, "family", "-"),
+        "impersonate": impersonate,
+        "is_default": "yes" if name in DEFAULT_PROFILES else "",
+    }
+
+
 def get(name: str) -> type[Probe]:
     try:
         return Registry[name]

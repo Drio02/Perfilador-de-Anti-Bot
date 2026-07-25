@@ -13,6 +13,7 @@ dynamic = ["dependencies"]
 # Esto es lo que hace que tras `pip install -e .` puedas escribir
 # `scout https://ejemplo.com` en la terminal en vez de `python -m scout`.
 scout = "scout.cli:app"
+antibot-sniff = "scout.cli:app"
  
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
