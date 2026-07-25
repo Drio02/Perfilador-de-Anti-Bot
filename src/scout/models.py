@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 
 class ProbeOutcome(str, Enum):
-    """En qué capa terminó el sondeo. La capa donde te cortan revela la defensa."""
+
 
     RESPONSE = "response"
     DNS_ERROR = "dns_error"
@@ -47,7 +47,9 @@ def _utcnow() -> datetime:
 
 
 class ProbeResult(BaseModel):
-    """Todo lo que sabemos de una petición: un perfil, una URL. Inmutable."""
+    '''
+    All we know about a request: a profile, a URL. Immutable.
+    '''
 
     model_config = {"frozen": True}
 
@@ -56,13 +58,22 @@ class ProbeResult(BaseModel):
     timestamp: datetime = Field(default_factory=_utcnow)
 
     outcome: ProbeOutcome
-    error_detail: str | None = None
+    error_detail: str | None = Field(
+        default=None,
+        description='Raw message. Just for debug y find cases that need its own ProbeOutcome'
+    )
 
     elapsed_ms: float = 0.0
 
     status_code: int | None = None
-    http_version: str | None = None
-    final_url: str | None = None
+    http_version: str | None = Field(
+        default=None,
+        description='HTTP/1.1 or HTTP/2. Some webs downgrade to 1.1 the unlike clients'
+    )
+    final_url: str | None = Field(
+        default=None,
+        description='URL after follow redirections. If change, the web sent you to a verification page'
+    )
     redirect_chain: list[str] = Field(default_factory=list)
 
     headers: dict[str, str] = Field(default_factory=dict)
@@ -170,3 +181,52 @@ class ProbeMatrix(BaseModel):
             for r in self.results
             if r.looks_allowed and r.body_sha256 is not None
         }
+
+class VendorRole(str, Enum):
+    '''
+    Function the follow a vendor in a answer
+    '''
+
+    CDN = 'cdn'
+    WAF = 'waf'
+    BOT_DEFENSE = 'bot_defense'
+
+class VendorMatch(BaseModel):
+    '''
+    Vendor detected in a ProbeResult, with confidence and the reason
+    '''
+
+    model_config = {"frozen": True}
+ 
+    vendor_id: str
+    name: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    roles: frozenset[VendorRole]
+    evidence: tuple[str, ...] = Field(min_length=1)
+ 
+    @property
+    def is_bot_defense(self) -> bool:
+        return VendorRole.BOT_DEFENSE in self.roles
+
+class Detection(BaseModel):
+    '''
+    All vendors detected in on ProbeResult, plus who blocked
+    '''
+    model_config = {"frozen": True}
+ 
+    matches: tuple[VendorMatch, ...] = ()
+    enforcer_id: str | None = None
+ 
+    @property
+    def vendor_ids(self) -> list[str]:
+        return [m.vendor_id for m in self.matches]
+ 
+    @property
+    def bot_defenses(self) -> list[VendorMatch]:
+        return [m for m in self.matches if m.is_bot_defense]
+ 
+    @property
+    def enforcer(self) -> VendorMatch | None:
+        if self.enforcer_id is None:
+            return None
+        return next((m for m in self.matches if m.vendor_id == self.enforcer_id), None)
