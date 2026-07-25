@@ -7,6 +7,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.table import Table
 
+from scout.fingerprints.matcher import detect
 from scout.models import ProbeMatrix, ProbeOutcome, ProbeResult
 
 console = Console()
@@ -41,7 +42,9 @@ def render_matrix(matrix: ProbeMatrix) -> None:
     table.add_column("bytes", justify="right")
     table.add_column("sha256")
     table.add_column("server")
+    table.add_column("defense")
 
+ 
     for r in matrix.results:
         style = _STYLES.get(r.outcome, "white")
         table.add_row(
@@ -51,12 +54,31 @@ def render_matrix(matrix: ProbeMatrix) -> None:
             r.http_version or "-",
             f"{r.elapsed_ms:.0f}",
             str(r.body_size) if r.body_size else "-",
-            r.body_sha256[:12] if r.body_sha256 else "-",
             r.header("server") or "-",
+            _defense_cell(r),
         )
+
 
     console.print(table)
     _render_errors(matrix)
+
+
+def _defense_cell(r: ProbeResult) -> str:
+    d = detect(r)
+    if not d.matches:
+        return "-"
+    partes = []
+    for m in d.matches:
+        etq = m.name
+        if m.vendor_id == d.enforcer_id:
+            etq = f"[red]{etq} [!][/red]"
+        elif m.is_bot_defense:
+            etq = f"[yellow]{etq}[/yellow]"
+        else:
+            etq = f"[dim]{etq}[/dim]"
+        partes.append(etq)
+    return ", ".join(partes)
+
 
 def _render_errors(matrix: ProbeMatrix) -> None:
     failes = [r for r in matrix.results if r.error_detail]
