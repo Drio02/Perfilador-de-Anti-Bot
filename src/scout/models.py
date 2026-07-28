@@ -230,3 +230,34 @@ class Detection(BaseModel):
         if self.enforcer_id is None:
             return None
         return next((m for m in self.matches if m.vendor_id == self.enforcer_id), None)
+
+class DefenseType(str, Enum):
+    NO_PROTECTION = 'no_protection'
+    TLS_FINGERPRINT = 'tls_fingerprint'
+    APP_FINGERPRINT = 'app_fingerprint'
+    HARD_CHALLENGE = 'hard_challenge'
+    SHADOW_BAN = 'shadow_ban'
+    INDETERMINATE = 'indeterminate'
+
+    @property
+    def solved_by_impersonte(self) -> bool:
+        return self in {DefenseType.TLS_FINGERPRINT, DefenseType.APP_FINGERPRINT}
+
+class Diagnosis(BaseModel):
+    model_config = {'frozen' : True}
+
+    defense_type: DefenseType
+
+    evidence: tuple[str, ...] = ()
+
+    enforcer_id: str | None = None
+
+    caveats: tuple[str, ...] = ()
+
+    @property
+    def _is_actionable(self) -> bool:
+        return self.defense_type is not DefenseType.INDETERMINATE
+
+    @property
+    def needs_confirmation(self) -> bool:
+        return bool(self.caveats)
