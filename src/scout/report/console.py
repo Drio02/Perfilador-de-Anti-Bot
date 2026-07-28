@@ -99,3 +99,32 @@ def render_headers(result: ProbeResult) -> None:
     for k, v in sorted(result.headers.items()):
         table.add_row(k, v)
     console.print(table)
+
+def render_diagnosis(matrix: ProbeMatrix) -> None:
+    from rich.panel import Panel
+ 
+    from scout.analysis.engine import analyze
+ 
+    d = analyze(matrix)
+ 
+    _VERDICT_STYLE = {
+        "no_protection": "green",
+        "tls_fingerprint": "yellow",
+        "app_fingerprint": "yellow",
+        "hard_challenge": "red",
+        "shadow_ban": "red",
+        "indeterminate": "dim",
+    }
+    style = _VERDICT_STYLE.get(d.defense_type.value, "white")
+ 
+    lineas = [f"[bold {style}]{d.defense_type.value}[/bold {style}]  (confianza {d.confidence:.0%})"]
+    if d.enforcer_id:
+        lineas.append(f"enforcer: {d.enforcer_id}")
+    if d.evidence:
+        lineas.append("\n[bold]Evidencia:[/bold]")
+        lineas += [f"  • {e}" for e in d.evidence]
+    if d.caveats:
+        lineas.append("\n[bold]Advertencias:[/bold]")
+        lineas += [f"  ⚠ {c}" for c in d.caveats]
+ 
+    console.print(Panel("\n".join(lineas), title="Diagnóstico", border_style=style))

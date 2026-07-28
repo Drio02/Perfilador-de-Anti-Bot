@@ -248,6 +248,8 @@ class Diagnosis(BaseModel):
 
     defense_type: DefenseType
 
+    confidence: float = Field(ge=0.0, le=1.0)
+
     evidence: tuple[str, ...] = ()
 
     enforcer_id: str | None = None

@@ -55,6 +55,7 @@ def scan(
         return
  
     report.render_matrix(matrix)
+    report.render_diagnosis(matrix)
     if verbose:
         for r in matrix.results:
             report.render_headers(r)
